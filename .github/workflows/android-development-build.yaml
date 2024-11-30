@@ -1,0 +1,53 @@
+name: Android Development Build
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup repo
+        uses: actions/checkout@v4
+      
+      - name: Setup node
+        uses: actions/setup-node@v4.0.2
+        with:
+          node-version: 18.x
+          cache: 'npm'
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        
+      - name: Setup Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE }}" > release.keystore.asc
+          echo "${{ secrets.CREDENTIAL }}" > credential.asc
+          gpg -d --passphrase "${{ secrets.KEYSTORE_PASS }}" --batch "release.keystore.asc" > "release.keystore"
+          gpg -d --passphrase "${{ secrets.KEYSTORE_PASS }}" --batch "credential.asc" > "credential.json"
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci && npm i expo-dev-client
+
+      - name: Build Android app
+        run: eas build --platform android --profile development --local --output ${{ github.workspace }}/app-release.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: ${{ github.workspace }}/app-release.apk
